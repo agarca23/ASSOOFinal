@@ -5,6 +5,7 @@
 //#include <asm/uaccess.h>        /* copy_to_user          */
 #include <linux/buffer_head.h>  /* buffer_head           */
 #include <linux/slab.h>         /* kmem_cache            */
+#include "assoofs.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Andres Garcia Alvarez");
@@ -17,6 +18,16 @@ static struct file_system_type assoofs_type ={
 	.name="assoofs",
 	//.mount=assoofs_mount,
 	.kill_sb=kill_litter_super,
+};
+
+static const struct super_operations assoofs_ops = {
+	.drop_inode     = generic_delete_inode ,
+};
+
+static struct inode_operations assoofs_inode_ops = {
+	.create = assoofs_create,
+	.lookup = assoofs_lookup,
+	.mkdir = assoofs_mkdir,
 };
 
 int assoofs_fill_super(struct super_block *sb, void *data, int silent){
@@ -41,6 +52,23 @@ int assoofs_fill_super(struct super_block *sb, void *data, int silent){
 	printk(KERN_INFO "assoofs filesystem of version %llu formatted with block size of %llu detected in the device.\n", assoofs_sb->version, assoofs_sb->block_size);
 
 	/*asignar toda la informacion al superbloque*/
+	sb->s_magic=ASSOOFS_MAGIC;
+	sb->s_fs_info=assoofs_sb;
+	sb->s_maxbytes=ASSOOFS_DEFAULT_BLOCK_SIZE;
+	sb->s_op=&assoofs_ops;
+	root_inode=new_inode(sb);
+	inode_init_owner(root_inode,NULL,S_IFDIR);
+	root_inode->i_ino=ASSOOFS_ROOTDIR_INODE_NUMBER;
+	root_inode->i_sb=sb;
+	root_inode->i_op = &assoofs_inode_ops;
+	root_inode->i_atime=current_time(root_inode);
+	root_inode->i_mtime=current_time(root_inode);
+	root_inode->i_ctime=current_time(root_inode);
+	root_inode->i_private = assoofs_get_inode_info(sb , ASSOOFS_ROOTDIR_INODE_NUMBER);
+
+	sb->s_root = d_make_root(root_inode);
+
+	return 0;
 
 }
 
@@ -78,6 +106,8 @@ static void __exit assoofs_exit(void){
 	else
 		printk(KERN_ERR "Failed to unregister assoofs, Error %d", ret);
 }
+
+
 
 module_init(assoofs_init);
 module_exit(assoofs_exit);
