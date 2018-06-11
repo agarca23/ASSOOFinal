@@ -58,44 +58,58 @@ const struct file_operations assoofs_dir_operations =
 };
 
 int assoofs_fill_super(struct super_block *sb, void *data, int silent){
+	struct buffer_head *b;
+	struct assoofs_super_block_info *sb_info;
 	struct inode *root_inode;
-	struct buffer_head *bh;
-	struct assoofs_super_block_info *assoofs_sb;
 
-	bh=sb_bread(sb,ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);
-	assoofs_sb=(struct assoofs_super_block_info *)bh->b_data;
+	printk(KERN_DEBUG "-fill_super-\n");
 
-	printk(KERN_INFO "The magic number obtained in disk is %llu\n", assoofs_sb->magic);
-	if(assoofs_sb->magic!=ASSOOFS_MAGIC){
-		printk(KERN_ERR "The filesystem that you try to mount is not of type assoofs, MagicNumber mismach");
-		brelse(bh);
-		return -EPERM;
+	// Leer info superbloque
+	b = sb_bread(sb, ASSOOFS_SUPERBLOCK_BLOCK_NUMBER);
+	sb_info = (struct assoofs_super_block_info *) b->b_data;
+
+	// Comprobar info superbloque
+	if (sb_info->magic != ASSOOFS_MAGIC) {
+		printk(KERN_ERR "Número mágico erróneo: %llu\n",sb_info->magic);
+		return -1;
 	}
-	if(assoofs_sb->block_size!=ASSOOFS_DEFAULT_BLOCK_SIZE){
-		printk(KERN_ERR "assoofs seem to be formatted using a wrong block size.");
-		brelse(bh);
-		return -EPERM;
+	else
+		printk(KERN_INFO "Número mágico obtenido: %llu\n",sb_info->magic);
+
+	if (sb_info->block_size != ASSOOFS_DEFAULT_BLOCK_SIZE) {
+		printk(KERN_ERR "Tamaño de bloque erróneo\n");
+		return -1;
 	}
-	printk(KERN_INFO "assoofs filesystem of version %llu formatted with block size of %llu detected in the device.\n", assoofs_sb->version, assoofs_sb->block_size);
 
-	/*asignar toda la informacion al superbloque*/
-	sb->s_magic=ASSOOFS_MAGIC;
-	sb->s_maxbytes=ASSOOFS_DEFAULT_BLOCK_SIZE;
-	sb->s_op=&assoofs_ops;
-	sb->s_fs_info=assoofs_sb;
+	printk(KERN_INFO
+			"Sistema de ficheros assoofs en versión %llu formateado con un tamaño de bloque %llu\n",
+			sb_info->version, sb_info->block_size);
 
-	root_inode=new_inode(sb);
-	inode_init_owner(root_inode,NULL,S_IFDIR);
-	root_inode->i_ino=ASSOOFS_ROOTDIR_INODE_NUMBER;
-	root_inode->i_sb=sb;
+	// Rellenar superbloque
+	sb->s_magic = ASSOOFS_MAGIC;
+	sb->s_fs_info = sb_info;
+	sb->s_maxbytes = ASSOOFS_DEFAULT_BLOCK_SIZE;
+	sb->s_op = &assoofs_sops;
+
+
+	// Crear inodo directorio raíz
+
+	root_inode = new_inode(sb);
+
+	root_inode->i_ino = ASSOOFS_ROOTDIR_INODE_NUMBER;
+	root_inode->i_sb = sb;
 	root_inode->i_op = &assoofs_inode_ops;
-	root_inode->i_atime=current_time(root_inode);
-	root_inode->i_mtime=current_time(root_inode);
-	root_inode->i_ctime=current_time(root_inode);
-	root_inode->i_private = assoofs_get_inode_info(sb , ASSOOFS_ROOTDIR_INODE_NUMBER);
+	root_inode->i_fop = &assoofs_dir_operations;
+	root_inode->i_atime = current_time(root_inode);
+	root_inode->i_mtime = current_time(root_inode);
+	root_inode->i_ctime = current_time(root_inode);
+	root_inode->i_private = assoofs_get_inode_info(sb, ASSOOFS_ROOTDIR_INODE_NUMBER);
+
+	inode_init_owner(root_inode, NULL, S_IFDIR);
 
 	sb->s_root = d_make_root(root_inode);
 
+	brelse(b);
 	return 0;
 
 }
