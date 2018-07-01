@@ -1,6 +1,6 @@
 obj-m := assoofs.o
 
-all: ko
+all: ko mkassoofs
 
 ko:
 	make -C /lib/modules/$(shell uname -r)/build M=$(PWD) modules
